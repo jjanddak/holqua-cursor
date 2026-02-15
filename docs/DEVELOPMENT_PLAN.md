@@ -62,7 +62,7 @@
   - 손 떼면 게이지 0으로 초기화, 성공 시 target 초기화 및 `setIsHolding(false)`
   - `isHolding` 상태로 누르고 있을 때만 원형 링 표시
 
-### Step 5
+### Step 5 ✅ 완료
 - **오감 피드백**
   - `expo-haptics`: 명상 중 10초마다 짧은 진동(Selection), 완료 시 강한 진동(NotificationSuccess)
   - `expo-av`: 명상 중 잔잔한 물소리(ASMR) 루프, 완료 시 맑은 종소리
@@ -112,4 +112,5 @@
 | `App.tsx` | GestureHandlerRootView, TankCanvas, useFishStore 구독 |
 | `src/components/TankCanvas.tsx` | 수조 배경 + 물고기(꼬리 흔들림, 터치 추적) + AWAY 시 편지 아이콘 |
 
-이 문서를 기준으로 Step 5부터 순서대로 구현하면 됨.
+이 문서를 기준으로 Step 5부터 순서대로 구현하면 됨.  
+**현재 진행할 단계**: `docs/NEXT_STEP.md` 참고.

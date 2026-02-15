@@ -19,6 +19,7 @@ import {
   runOnJS,
 } from 'react-native-reanimated';
 import { useFishStore } from '../store';
+import { useMeditationFeedback } from '../hooks';
 import { Colors } from '../constants';
 
 const MEDITATION_NORMAL_MS = 60 * 1000;
@@ -73,6 +74,7 @@ export function TankCanvas() {
   const feed = useFishStore((s) => s.feed);
 
   const [isHolding, setIsHolding] = useState(false);
+  const { onMeditationComplete } = useMeditationFeedback(isHolding);
 
   const clock = useClock();
   const fishX = useSharedValue(width / 2);
@@ -144,6 +146,7 @@ export function TankCanvas() {
       progress.value + dt / requiredDurationMs.value
     );
     if (progress.value >= 1) {
+      runOnJS(onMeditationComplete)();
       runOnJS(feed)();
       progress.value = 0;
       targetX.value = -1;
