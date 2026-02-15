@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import {
@@ -16,9 +16,15 @@ import {
   useSharedValue,
   useFrameCallback,
   useDerivedValue,
+  runOnJS,
 } from 'react-native-reanimated';
 import { useFishStore } from '../store';
 import { Colors } from '../constants';
+
+const MEDITATION_NORMAL_MS = 60 * 1000;
+const MEDITATION_AWAY_MS = 120 * 1000;
+const PROGRESS_RING_R = 56;
+const PROGRESS_STROKE = 8;
 
 const FISH_BODY_RX = 20;
 const FISH_BODY_RY = 10;
@@ -50,12 +56,23 @@ const tailPath = (() => {
 
 const letterPath = makeLetterIconPath(36);
 
+/** 원형 프로그레스용 Path (중심 cx,cy 반지름 r) */
+function makeCirclePath(cx: number, cy: number, r: number) {
+  const p = Skia.Path.Make();
+  p.addCircle(cx, cy, r);
+  return p;
+}
+
 /**
- * 수조 배경 + 물고기/편지 아이콘. 터치 시 물고기가 해당 위치를 추적한다.
+ * 수조 배경 + 물고기/편지 아이콘 + 명상 Hold to Feed 원형 게이지.
+ * 터치 시 물고기 추적, 누르고 있으면 게이지 상승(60초/120초 완료 시 feed).
  */
 export function TankCanvas() {
   const { width, height } = useWindowDimensions();
   const status = useFishStore((s) => s.status);
+  const feed = useFishStore((s) => s.feed);
+
+  const [isHolding, setIsHolding] = useState(false);
 
   const clock = useClock();
   const fishX = useSharedValue(width / 2);
@@ -64,19 +81,32 @@ export function TankCanvas() {
   const targetX = useSharedValue(-1);
   const targetY = useSharedValue(-1);
   const randomAngle = useSharedValue(0);
+  const progress = useSharedValue(0);
+  const requiredDurationMs = useSharedValue(MEDITATION_NORMAL_MS);
+
+  useEffect(() => {
+    requiredDurationMs.value =
+      status === 'AWAY' ? MEDITATION_AWAY_MS : MEDITATION_NORMAL_MS;
+  }, [status]);
 
   const panGesture = Gesture.Pan()
     .onStart((e) => {
       targetX.value = e.x;
       targetY.value = e.y;
+      progress.value = 0;
+      runOnJS(setIsHolding)(true);
     })
     .onUpdate((e) => {
       targetX.value = e.x;
       targetY.value = e.y;
     })
     .onEnd(() => {
+      if (progress.value < 1) {
+        progress.value = 0;
+      }
       targetX.value = -1;
       targetY.value = -1;
+      runOnJS(setIsHolding)(false);
     });
 
   useFrameCallback((frame) => {
@@ -105,6 +135,23 @@ export function TankCanvas() {
     fishY.value = Math.max(MARGIN, Math.min(height - MARGIN, fishY.value));
   });
 
+  useFrameCallback((frame) => {
+    'worklet';
+    if (targetX.value < 0) return;
+    const dt = frame.timeSincePreviousFrame ?? 16;
+    progress.value = Math.min(
+      1,
+      progress.value + dt / requiredDurationMs.value
+    );
+    if (progress.value >= 1) {
+      runOnJS(feed)();
+      progress.value = 0;
+      targetX.value = -1;
+      targetY.value = -1;
+      runOnJS(setIsHolding)(false);
+    }
+  });
+
   useEffect(() => {
     fishX.value = width / 2;
     fishY.value = height / 2;
@@ -129,6 +176,11 @@ export function TankCanvas() {
   const letterX = width / 2 - 18;
   const letterY = height - 80;
 
+  const progressCirclePath = useMemo(
+    () => makeCirclePath(width / 2, height / 2, PROGRESS_RING_R),
+    [width, height]
+  );
+
   return (
     <GestureDetector gesture={panGesture}>
       <Canvas style={{ flex: 1, width, height }}>
@@ -139,6 +191,27 @@ export function TankCanvas() {
             colors={[Colors.tankGradientTop, Colors.tankGradientBottom]}
           />
         </Rect>
+        {isHolding && (
+          <Group>
+            <Path
+              path={progressCirclePath}
+              style="stroke"
+              strokeWidth={PROGRESS_STROKE}
+              strokeCap="round"
+              color={Colors.outline}
+              opacity={0.5}
+            />
+            <Path
+              path={progressCirclePath}
+              style="stroke"
+              strokeWidth={PROGRESS_STROKE}
+              strokeCap="round"
+              color={Colors.primary}
+              start={0}
+              end={progress}
+            />
+          </Group>
+        )}
         {status === 'NORMAL' && (
           <Group transform={fishTransform} origin={{ x: 0, y: 0 }}>
             <Ellipse

@@ -55,11 +55,12 @@
   - `status === AWAY`일 때: 물고기 숨김, 바닥 중앙에 **작은 편지(봉투) 아이콘** Path로 표시
   - `react-native-gesture-handler` 설치, `GestureHandlerRootView`로 앱 루트 래핑
 
-### Step 4
-- **명상 타이머 (Hold to Feed)**
-  - `GestureDetector`로 화면 누르고 있는 동안 Skia **원형 프로그레스 바** 게이지 상승
-  - NORMAL: **60초**, AWAY: **120초** 유지 시 성공
-  - 손 떼면 게이지 0으로 초기화, 성공 시 이벤트 발생
+### Step 4 ✅ 완료
+- **명상 타이머 (Hold to Feed)** — `src/components/TankCanvas.tsx`
+  - Pan 제스처로 화면 누르는 동안 Skia **원형 프로그레스** 게이지 상승 (Path stroke + start/end trim)
+  - NORMAL: **60초**, AWAY: **120초** 유지 시 성공 시 `feed()` 호출
+  - 손 떼면 게이지 0으로 초기화, 성공 시 target 초기화 및 `setIsHolding(false)`
+  - `isHolding` 상태로 누르고 있을 때만 원형 링 표시
 
 ### Step 5
 - **오감 피드백**
@@ -111,4 +112,4 @@
 | `App.tsx` | GestureHandlerRootView, TankCanvas, useFishStore 구독 |
 | `src/components/TankCanvas.tsx` | 수조 배경 + 물고기(꼬리 흔들림, 터치 추적) + AWAY 시 편지 아이콘 |
 
-이 문서를 기준으로 Step 4부터 순서대로 구현하면 됨.
+이 문서를 기준으로 Step 5부터 순서대로 구현하면 됨.
