@@ -1,1 +1,2 @@
-// store 배치
+export { useFishStore } from './fishStore';
+export type { FishStatus, FishState } from './fishStore';
