@@ -1,5 +1,13 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useWindowDimensions } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  useWindowDimensions,
+  View,
+  Text,
+  Modal,
+  Pressable,
+  StyleSheet,
+} from 'react-native';
+import LottieView from 'lottie-react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import {
   Canvas,
@@ -20,7 +28,7 @@ import {
 } from 'react-native-reanimated';
 import { useFishStore } from '../store';
 import { useMeditationFeedback } from '../hooks';
-import { Colors } from '../constants';
+import { Colors, FontSize, Spacing, BorderRadius, getRandomProductivityQuestion } from '../constants';
 
 const MEDITATION_NORMAL_MS = 60 * 1000;
 const MEDITATION_AWAY_MS = 120 * 1000;
@@ -74,7 +82,26 @@ export function TankCanvas() {
   const feed = useFishStore((s) => s.feed);
 
   const [isHolding, setIsHolding] = useState(false);
+  const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
+  const [successFishX, setSuccessFishX] = useState(0);
+  const [successFishY, setSuccessFishY] = useState(0);
+  const [successQuestion, setSuccessQuestion] = useState('');
+  const [letterModalVisible, setLetterModalVisible] = useState(false);
+
   const { onMeditationComplete } = useMeditationFeedback(isHolding);
+
+  const handleMeditationSuccess = useCallback(
+    (x: number, y: number) => {
+      onMeditationComplete();
+      feed();
+      setSuccessFishX(x);
+      setSuccessFishY(y);
+      setSuccessQuestion(getRandomProductivityQuestion());
+      setShowSuccessOverlay(true);
+      setTimeout(() => setShowSuccessOverlay(false), 4000);
+    },
+    [onMeditationComplete, feed]
+  );
 
   const clock = useClock();
   const fishX = useSharedValue(width / 2);
@@ -146,8 +173,7 @@ export function TankCanvas() {
       progress.value + dt / requiredDurationMs.value
     );
     if (progress.value >= 1) {
-      runOnJS(onMeditationComplete)();
-      runOnJS(feed)();
+      runOnJS(handleMeditationSuccess)(fishX.value, fishY.value);
       progress.value = 0;
       targetX.value = -1;
       targetY.value = -1;
@@ -184,60 +210,192 @@ export function TankCanvas() {
     [width, height]
   );
 
+  const SPARKLE_SIZE = 100;
+
   return (
-    <GestureDetector gesture={panGesture}>
-      <Canvas style={{ flex: 1, width, height }}>
-        <Rect x={0} y={0} width={width} height={height}>
-          <LinearGradient
-            start={vec(0, 0)}
-            end={vec(width, height)}
-            colors={[Colors.tankGradientTop, Colors.tankGradientBottom]}
-          />
-        </Rect>
-        {isHolding && (
-          <Group>
-            <Path
-              path={progressCirclePath}
-              style="stroke"
-              strokeWidth={PROGRESS_STROKE}
-              strokeCap="round"
-              color={Colors.outline}
-              opacity={0.5}
+    <View style={styles.container}>
+      <GestureDetector gesture={panGesture}>
+        <Canvas style={{ flex: 1, width, height }}>
+          <Rect x={0} y={0} width={width} height={height}>
+            <LinearGradient
+              start={vec(0, 0)}
+              end={vec(width, height)}
+              colors={[Colors.tankGradientTop, Colors.tankGradientBottom]}
             />
-            <Path
-              path={progressCirclePath}
-              style="stroke"
-              strokeWidth={PROGRESS_STROKE}
-              strokeCap="round"
-              color={Colors.primary}
-              start={0}
-              end={progress}
-            />
-          </Group>
-        )}
-        {status === 'NORMAL' && (
-          <Group transform={fishTransform} origin={{ x: 0, y: 0 }}>
-            <Ellipse
-              cx={0}
-              cy={0}
-              rx={FISH_BODY_RX}
-              ry={FISH_BODY_RY}
-              color={Colors.primary}
-            />
-            <Group transform={tailTransform} origin={{ x: 0, y: 0 }}>
-              <Path path={tailPath} color={Colors.primary} />
+          </Rect>
+          {isHolding && (
+            <Group>
+              <Path
+                path={progressCirclePath}
+                style="stroke"
+                strokeWidth={PROGRESS_STROKE}
+                strokeCap="round"
+                color={Colors.outline}
+                opacity={0.5}
+              />
+              <Path
+                path={progressCirclePath}
+                style="stroke"
+                strokeWidth={PROGRESS_STROKE}
+                strokeCap="round"
+                color={Colors.primary}
+                start={0}
+                end={progress}
+              />
             </Group>
-          </Group>
-        )}
-        {status === 'AWAY' && (
-          <Group
-            transform={[{ translateX: letterX }, { translateY: letterY }]}
-            origin={{ x: 18, y: 0 }}
-          >
-            <Path path={letterPath} color={Colors.onSurfaceVariant} />
-          </Group>
-        )}
-      </Canvas>
-    </GestureDetector>
+          )}
+          {status === 'NORMAL' && (
+            <Group transform={fishTransform} origin={{ x: 0, y: 0 }}>
+              <Ellipse
+                cx={0}
+                cy={0}
+                rx={FISH_BODY_RX}
+                ry={FISH_BODY_RY}
+                color={Colors.primary}
+              />
+              <Group transform={tailTransform} origin={{ x: 0, y: 0 }}>
+                <Path path={tailPath} color={Colors.primary} />
+              </Group>
+            </Group>
+          )}
+          {status === 'AWAY' && (
+            <Group
+              transform={[{ translateX: letterX }, { translateY: letterY }]}
+              origin={{ x: 18, y: 0 }}
+            >
+              <Path path={letterPath} color={Colors.onSurfaceVariant} />
+            </Group>
+          )}
+        </Canvas>
+      </GestureDetector>
+
+      {status === 'AWAY' && (
+        <Pressable
+          style={[
+            styles.letterTouchArea,
+            {
+              left: width / 2 - 40,
+              top: height - 80 - 40,
+            },
+          ]}
+          onPress={() => setLetterModalVisible(true)}
+        />
+      )}
+
+      {showSuccessOverlay && (
+        <View
+          style={[
+            styles.successOverlay,
+            {
+              left: successFishX - SPARKLE_SIZE / 2,
+              top: successFishY - SPARKLE_SIZE - 60,
+            },
+          ]}
+          pointerEvents="none"
+        >
+          <LottieView
+            source={require('../../assets/lottie/sparkle.json')}
+            autoPlay
+            loop={false}
+            style={{ width: SPARKLE_SIZE, height: SPARKLE_SIZE }}
+          />
+          <View style={styles.bubble}>
+            <Text style={styles.bubbleText} numberOfLines={2}>
+              {successQuestion}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      <Modal
+        visible={letterModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLetterModalVisible(false)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setLetterModalVisible(false)}
+        >
+          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.modalTitle}>물고기가 떠났어요</Text>
+            <Text style={styles.modalBody}>
+              하루 동안 명상으로 먹이를 주지 않으면 물고기가 그만큼 멀어져요.
+              {'\n\n'}
+              다시 만나려면 2분 동안 잠깐 숨을 고르는 명상을 완료해 주세요.
+            </Text>
+            <Pressable
+              style={styles.modalButton}
+              onPress={() => setLetterModalVisible(false)}
+            >
+              <Text style={styles.modalButtonText}>알겠어요</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  letterTouchArea: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+  },
+  successOverlay: {
+    position: 'absolute',
+    alignItems: 'center',
+    width: 100,
+  },
+  bubble: {
+    marginTop: 4,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: BorderRadius.md,
+    maxWidth: 200,
+  },
+  bubbleText: {
+    fontSize: FontSize.sm,
+    color: Colors.onSurface,
+    textAlign: 'center',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.lg,
+  },
+  modalContent: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.xl,
+    maxWidth: 320,
+  },
+  modalTitle: {
+    fontSize: FontSize.xl,
+    color: Colors.onSurface,
+    marginBottom: Spacing.md,
+    textAlign: 'center',
+  },
+  modalBody: {
+    fontSize: FontSize.md,
+    color: Colors.onSurfaceVariant,
+    lineHeight: 22,
+    marginBottom: Spacing.lg,
+  },
+  modalButton: {
+    backgroundColor: Colors.primary,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    fontSize: FontSize.md,
+    color: Colors.surface,
+  },
+});
