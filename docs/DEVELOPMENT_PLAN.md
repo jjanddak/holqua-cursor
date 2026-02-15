@@ -48,11 +48,12 @@
   - **AsyncStorage** persist (`mindful-tank-fish`)로 앱 재시작 후에도 상태 유지
   - `App.tsx`에서 `useFishStore` 구독으로 앱 로드 시 재수화 및 `checkStatus` 실행
 
-### Step 3 (다음 구현)
-- **Skia 물고기 애니메이션**
-  - 단순 물고기 형태 SVG Path를 코드로 작성, 꼬리 살랑거림(Math.sin)
-  - 평소 무작위로 헤엄, **터치한 위치를 추적(Follow)**
-  - `status === AWAY`일 때: 물고기 숨김, 바닥에 **작은 편지 아이콘** 표시
+### Step 3 ✅ 완료
+- **Skia 물고기 애니메이션** — `src/components/TankCanvas.tsx` (통합)
+  - Ellipse + Path로 단순 물고기 형태, 꼬리 살랑거림(useClock + useDerivedValue, Math.sin)
+  - 평소 시간 기반으로 방향 변경하며 헤엄, **Pan 제스처로 터치한 위치 추적(Follow)**
+  - `status === AWAY`일 때: 물고기 숨김, 바닥 중앙에 **작은 편지(봉투) 아이콘** Path로 표시
+  - `react-native-gesture-handler` 설치, `GestureHandlerRootView`로 앱 루트 래핑
 
 ### Step 4
 - **명상 타이머 (Hold to Feed)**
@@ -107,6 +108,7 @@
 | `src/constants/theme.ts` | Colors, FontSize, Spacing 등 |
 | `src/components/TankCanvas.tsx` | Skia 수조 배경 그라데이션 |
 | `src/store/fishStore.ts` | 생존 상태(NORMAL/AWAY), lastFedTime, streak, checkStatus, feed, AsyncStorage persist |
-| `App.tsx` | TankCanvas 렌더 + useFishStore 구독으로 재수화/checkStatus 유발 |
+| `App.tsx` | GestureHandlerRootView, TankCanvas, useFishStore 구독 |
+| `src/components/TankCanvas.tsx` | 수조 배경 + 물고기(꼬리 흔들림, 터치 추적) + AWAY 시 편지 아이콘 |
 
-이 문서를 기준으로 Step 3부터 순서대로 구현하면 됨.
+이 문서를 기준으로 Step 4부터 순서대로 구현하면 됨.
