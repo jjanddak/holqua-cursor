@@ -1,23 +1,6 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, View } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { TankCanvas } from './src/components';
-import { useFishStore } from './src/store';
+import AppContent from './AppContent';
 
+/** 네이티브(iOS/Android) 진입점. 웹은 App.web.tsx 사용 */
 export default function App() {
-  useFishStore((s) => s.status);
-
-  return (
-    <GestureHandlerRootView style={styles.root}>
-      <View style={styles.container}>
-        <TankCanvas />
-        <StatusBar style="dark" />
-      </View>
-    </GestureHandlerRootView>
-  );
+  return <AppContent />;
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1 },
-  container: { flex: 1 },
-});

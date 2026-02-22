@@ -1,7 +1,10 @@
 import { useEffect, useRef } from 'react';
+import { Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
 import type { Sound } from 'expo-av/build/Audio';
+
+const isWeb = Platform.OS === 'web';
 
 const HAPTIC_INTERVAL_MS = 10 * 1000; // 10초마다 Selection 진동
 
@@ -76,9 +79,11 @@ export function useMeditationFeedback(isHolding: boolean) {
     }
 
     waterSoundRef.current?.playAsync().catch(() => {});
-    hapticIntervalRef.current = setInterval(() => {
-      Haptics.selectionAsync().catch(() => {});
-    }, HAPTIC_INTERVAL_MS);
+    if (!isWeb) {
+      hapticIntervalRef.current = setInterval(() => {
+        Haptics.selectionAsync().catch(() => {});
+      }, HAPTIC_INTERVAL_MS);
+    }
 
     return () => {
       if (hapticIntervalRef.current) {
@@ -95,9 +100,11 @@ export function useMeditationFeedback(isHolding: boolean) {
       hapticIntervalRef.current = null;
     }
     waterSoundRef.current?.stopAsync().catch(() => {});
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
-      () => {}
-    );
+    if (!isWeb) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+        () => {}
+      );
+    }
     bellSoundRef.current?.replayAsync().catch(() => {});
   };
 
