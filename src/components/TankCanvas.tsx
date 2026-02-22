@@ -15,7 +15,7 @@ import {
   LinearGradient,
   Path,
   Group,
-  Ellipse,
+  Oval,
   Skia,
   vec,
   useClock,
@@ -28,7 +28,16 @@ import {
 } from 'react-native-reanimated';
 import { useFishStore } from '../store';
 import { useMeditationFeedback } from '../hooks';
-import { Colors, FontSize, Spacing, BorderRadius, getRandomProductivityQuestion } from '../constants';
+import { ShopModal } from './ShopModal';
+import {
+  Colors,
+  FontSize,
+  Spacing,
+  BorderRadius,
+  getRandomProductivityQuestion,
+  getFishSkinById,
+  getTankThemeById,
+} from '../constants';
 
 const MEDITATION_NORMAL_MS = 60 * 1000;
 const MEDITATION_AWAY_MS = 120 * 1000;
@@ -80,6 +89,14 @@ export function TankCanvas() {
   const { width, height } = useWindowDimensions();
   const status = useFishStore((s) => s.status);
   const feed = useFishStore((s) => s.feed);
+  const fishSkinId = useFishStore((s) => s.fishSkinId);
+  const tankThemeId = useFishStore((s) => s.tankThemeId);
+
+  const fishSkin = getFishSkinById(fishSkinId);
+  const tankTheme = getTankThemeById(tankThemeId);
+  const fishColor = fishSkin?.color ?? Colors.primary;
+  const gradientTop = tankTheme?.gradientTop ?? Colors.tankGradientTop;
+  const gradientBottom = tankTheme?.gradientBottom ?? Colors.tankGradientBottom;
 
   const [isHolding, setIsHolding] = useState(false);
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
@@ -87,6 +104,7 @@ export function TankCanvas() {
   const [successFishY, setSuccessFishY] = useState(0);
   const [successQuestion, setSuccessQuestion] = useState('');
   const [letterModalVisible, setLetterModalVisible] = useState(false);
+  const [shopModalVisible, setShopModalVisible] = useState(false);
 
   const { onMeditationComplete } = useMeditationFeedback(isHolding);
 
@@ -214,13 +232,19 @@ export function TankCanvas() {
 
   return (
     <View style={styles.container}>
+      <Pressable
+        style={[styles.shopButton, { top: 48, right: Spacing.md }]}
+        onPress={() => setShopModalVisible(true)}
+      >
+        <Text style={styles.shopButtonText}>상점</Text>
+      </Pressable>
       <GestureDetector gesture={panGesture}>
         <Canvas style={{ flex: 1, width, height }}>
           <Rect x={0} y={0} width={width} height={height}>
             <LinearGradient
               start={vec(0, 0)}
               end={vec(width, height)}
-              colors={[Colors.tankGradientTop, Colors.tankGradientBottom]}
+              colors={[gradientTop, gradientBottom]}
             />
           </Rect>
           {isHolding && (
@@ -246,15 +270,15 @@ export function TankCanvas() {
           )}
           {status === 'NORMAL' && (
             <Group transform={fishTransform} origin={{ x: 0, y: 0 }}>
-              <Ellipse
-                cx={0}
-                cy={0}
-                rx={FISH_BODY_RX}
-                ry={FISH_BODY_RY}
-                color={Colors.primary}
+              <Oval
+                x={-FISH_BODY_RX}
+                y={-FISH_BODY_RY}
+                width={FISH_BODY_RX * 2}
+                height={FISH_BODY_RY * 2}
+                color={fishColor}
               />
               <Group transform={tailTransform} origin={{ x: 0, y: 0 }}>
-                <Path path={tailPath} color={Colors.primary} />
+                <Path path={tailPath} color={fishColor} />
               </Group>
             </Group>
           )}
@@ -307,6 +331,11 @@ export function TankCanvas() {
         </View>
       )}
 
+      <ShopModal
+        visible={shopModalVisible}
+        onClose={() => setShopModalVisible(false)}
+      />
+
       <Modal
         visible={letterModalVisible}
         transparent
@@ -339,6 +368,24 @@ export function TankCanvas() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  shopButton: {
+    position: 'absolute',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+    zIndex: 10,
+  },
+  shopButtonText: {
+    fontSize: FontSize.sm,
+    color: Colors.primary,
+    fontWeight: '600',
+  },
   letterTouchArea: {
     position: 'absolute',
     width: 80,
