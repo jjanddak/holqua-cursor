@@ -3,6 +3,8 @@ import {
   useWindowDimensions,
   View,
   Text,
+  Image,
+  ImageBackground,
   Modal,
   Pressable,
   StyleSheet,
@@ -33,6 +35,17 @@ import {
   getRandomAwayQuote,
   getRandomPomodoroQuote,
 } from '../constants';
+
+// 에셋 이미지
+const fishIdleImg = require('../../assets/images/fish-idle.png');
+const fishSurprisedImg = require('../../assets/images/fish-surprised.png');
+const foodImg = require('../../assets/images/food.png');
+const tankBgImg = require('../../assets/images/tank-bg.png');
+const iconScrollImg = require('../../assets/images/icon-scroll.png');
+const effectCelebrationImg = require('../../assets/images/effect-celebration.png');
+const iconSoundOnImg = require('../../assets/images/icon-sound-on.png');
+const iconSoundOffImg = require('../../assets/images/icon-sound-off.png');
+const iconTimerImg = require('../../assets/images/icon-timer.png');
 
 const MEDITATION_NORMAL_MS = 60 * 1000;
 const MEDITATION_AWAY_MS = 120 * 1000;
@@ -316,16 +329,18 @@ export function TankCanvas() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: Colors.tankBg }]}>
+    <ImageBackground source={tankBgImg} style={styles.container} resizeMode="cover">
       {/* 터치 영역 (전체 화면 — 맨 아래 레이어) */}
       <GestureDetector gesture={panGesture}>
         <View style={[StyleSheet.absoluteFill, styles.touchArea]}>
           {/* 물고기 (NORMAL 상태) */}
           {status === 'NORMAL' && (
             <Animated.View style={[styles.fish, fishStyle]}>
-              <Text style={styles.fishEmoji}>
-                {fishScared ? '😱' : '🐠'}
-              </Text>
+              <Image
+                source={fishScared ? fishSurprisedImg : fishIdleImg}
+                style={styles.fishImage}
+                resizeMode="contain"
+              />
             </Animated.View>
           )}
         </View>
@@ -340,7 +355,7 @@ export function TankCanvas() {
           ]}
           onPress={() => setLetterModalVisible(true)}
         >
-          <Text style={styles.noteEmoji}>📜</Text>
+          <Image source={iconScrollImg} style={styles.noteIcon} resizeMode="contain" />
           <Text style={styles.noteText} numberOfLines={1}>
             {status === 'AWAY' ? awayQuote : noteMessage || '...'}
           </Text>
@@ -361,15 +376,20 @@ export function TankCanvas() {
           style={styles.actionButton}
           onPress={toggleAmbientSound}
         >
-          <Text style={styles.actionButtonText}>
-            {ambientSoundEnabled ? '🔊' : '🔇'}
-          </Text>
+          <Image
+            source={ambientSoundEnabled ? iconSoundOnImg : iconSoundOffImg}
+            style={styles.actionIcon}
+            resizeMode="contain"
+          />
         </Pressable>
         <Pressable
           style={styles.actionButton}
           onPress={() => setShowPomodoroPanel(true)}
         >
-          <Text style={styles.actionButtonText}>⏱️ 집중</Text>
+          <View style={styles.actionRow}>
+            <Image source={iconTimerImg} style={styles.actionIcon} resizeMode="contain" />
+            <Text style={styles.actionButtonText}>집중</Text>
+          </View>
         </Pressable>
       </View>
 
@@ -395,14 +415,14 @@ export function TankCanvas() {
           style={[styles.foodDrop, foodDropStyle]}
           pointerEvents="none"
         >
-          <Text style={styles.foodEmoji}>🍞</Text>
+          <Image source={foodImg} style={styles.foodImage} resizeMode="contain" />
         </Animated.View>
       )}
 
       {/* 성공 오버레이 */}
       {showSuccessOverlay && (
         <View style={styles.successOverlay} pointerEvents="none">
-          <Text style={styles.successEmoji}>🎉</Text>
+          <Image source={effectCelebrationImg} style={styles.celebrationImage} resizeMode="contain" />
           <View style={styles.bubble}>
             <Text style={styles.bubbleText}>{successQuestion}</Text>
           </View>
@@ -451,7 +471,7 @@ export function TankCanvas() {
           </Pressable>
         </Pressable>
       </Modal>
-    </View>
+    </ImageBackground>
   );
 }
 
@@ -513,6 +533,8 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     alignItems: 'center',
   },
+  actionIcon: { width: 24, height: 24 },
+  actionRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   actionButtonText: {
     fontSize: FontSize.sm,
     color: Colors.primary,
@@ -524,20 +546,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  fishEmoji: { fontSize: 36 },
+  fishImage: { width: FISH_SIZE, height: FISH_SIZE },
   noteContainer: {
     position: 'absolute',
     alignItems: 'center',
     padding: Spacing.sm,
   },
-  noteEmoji: { fontSize: 32 },
+  noteIcon: { width: 36, height: 36 },
   foodDrop: {
     position: 'absolute',
     alignSelf: 'center',
     left: '50%',
     marginLeft: -16,
   },
-  foodEmoji: { fontSize: 32 },
+  foodImage: { width: 36, height: 36 },
   noteText: {
     color: Colors.onSurfaceVariant,
     fontSize: FontSize.xs,
@@ -578,7 +600,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  successEmoji: { fontSize: 64 },
+  celebrationImage: { width: 80, height: 80 },
   bubble: {
     marginTop: Spacing.md,
     paddingHorizontal: Spacing.lg,
