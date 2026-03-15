@@ -317,6 +317,36 @@ export function TankCanvas() {
 
   return (
     <View style={[styles.container, { backgroundColor: Colors.tankBg }]}>
+      {/* 터치 영역 (전체 화면 — 맨 아래 레이어) */}
+      <GestureDetector gesture={panGesture}>
+        <View style={[StyleSheet.absoluteFill, styles.touchArea]}>
+          {/* 물고기 (NORMAL 상태) */}
+          {status === 'NORMAL' && (
+            <Animated.View style={[styles.fish, fishStyle]}>
+              <Text style={styles.fishEmoji}>
+                {fishScared ? '😱' : '🐠'}
+              </Text>
+            </Animated.View>
+          )}
+        </View>
+      </GestureDetector>
+
+      {/* 쪽지 (AWAY 또는 실패 시) — 제스처 위에 */}
+      {(status === 'AWAY' || hasNote) && (
+        <Pressable
+          style={[
+            styles.noteContainer,
+            { left: width / 2 - 60, top: height / 2 + 40 },
+          ]}
+          onPress={() => setLetterModalVisible(true)}
+        >
+          <Text style={styles.noteEmoji}>📜</Text>
+          <Text style={styles.noteText} numberOfLines={1}>
+            {status === 'AWAY' ? awayQuote : noteMessage || '...'}
+          </Text>
+        </Pressable>
+      )}
+
       {/* 상태 표시 */}
       <View style={styles.statusBar}>
         <Text style={styles.statusText}>
@@ -342,33 +372,6 @@ export function TankCanvas() {
           <Text style={styles.actionButtonText}>⏱️ 집중</Text>
         </Pressable>
       </View>
-
-      <GestureDetector gesture={panGesture}>
-        <View style={StyleSheet.absoluteFill}>
-          {status === 'NORMAL' && (
-            <Animated.View style={[styles.fish, fishStyle]}>
-              <Text style={styles.fishEmoji}>
-                {fishScared ? '😱' : '🐠'}
-              </Text>
-            </Animated.View>
-          )}
-
-          {(status === 'AWAY' || hasNote) && (
-            <Pressable
-              style={[
-                styles.noteContainer,
-                { left: width / 2 - 60, top: height / 2 + 40 },
-              ]}
-              onPress={() => setLetterModalVisible(true)}
-            >
-              <Text style={styles.noteEmoji}>📜</Text>
-              <Text style={styles.noteText} numberOfLines={1}>
-                {status === 'AWAY' ? awayQuote : noteMessage || '...'}
-              </Text>
-            </Pressable>
-          )}
-        </View>
-      </GestureDetector>
 
       {/* 명상 프로그레스 바 */}
       {isHolding && (
@@ -477,6 +480,7 @@ function TimerDisplay({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  touchArea: { backgroundColor: 'transparent' },
   statusBar: {
     position: 'absolute',
     top: 56,
