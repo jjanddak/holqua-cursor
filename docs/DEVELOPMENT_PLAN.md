@@ -1,116 +1,183 @@
-# Mindful Tank — 개발 단계 및 아키텍처
+# Mindful Tank v2.0 — 개발 계획서
 
-> 둠스크롤링 방지용 명상 앱. 다른 AI 에이전트가 이 문서를 보고 단계별로 이어서 개발할 수 있도록 작성함.
+> 16-bit 레트로 픽셀아트 감성의 도파민 차단 앱.
+> PRD 기반 전면 리뉴얼. 이 문서를 기준으로 Phase별 순서대로 구현.
 
 ---
 
 ## 1. 기술 스택
 
-| 구분 | 기술 |
-|------|------|
-| **Graphics** | React Native Skia (`@shopify/react-native-skia`) |
-| **Animation** | Reanimated 3 (`react-native-reanimated`) |
-| **State** | Zustand |
-| **UI** | React Native Paper 또는 기본 컴포넌트 |
+| 구분 | 기존 | 변경 |
+|------|------|------|
+| Graphics | React Native Skia (벡터) | Skia Image (픽셀아트 스프라이트) |
+| Animation | Reanimated 3 | Reanimated 3 (유지) |
+| State | Zustand | Zustand (유지) |
+| Storage | AsyncStorage | **react-native-mmkv** |
+| Sound | expo-av | expo-av (유지) |
+| Haptic | expo-haptics | expo-haptics (유지) |
+| Font | System | **도트 폰트 (DungGeunMo 등)** |
+| Timer | 60초 명상만 | 명상 + **뽀모도로 (20분~4시간)** |
 
 ---
 
-## 2. 폴더 구조
+## 2. Phase 구조 (4 Phase)
+
+### Phase 1: 기초 인프라 전환
+> 기존 코드의 기반을 새 스택으로 마이그레이션
+
+| Task | 파일 | 내용 |
+|------|------|------|
+| 1-1 | `package.json` | react-native-mmkv, expo-font 추가 |
+| 1-2 | `src/store/fishStore.ts` | AsyncStorage → MMKV 교체 |
+| 1-3 | `src/constants/theme.ts` | 도트 폰트 FontFamily 추가, 다크 컬러 스키마 적용 |
+| 1-4 | `assets/fonts/` | 둥근모 또는 Pixelify Sans TTF 배치 |
+| 1-5 | `app.json` | 폰트 로딩 설정 |
+| 1-6 | `AppContent.tsx` | expo-font 로딩 대기 로직 |
+
+**완료 기준**: MMKV로 상태 저장/복원 정상 동작, 도트 폰트 텍스트 렌더링 확인
+
+---
+
+### Phase 2: 핵심 비주얼 & 인터랙션 리뉴얼
+> 벡터 → 픽셀아트 전환, 쪽지 시스템 강화, quotes 시스템
+
+| Task | 파일 | 내용 |
+|------|------|------|
+| 2-1 | `assets/sprites/` | 물고기 스프라이트시트 (idle, swim, eat, scared) 배치 |
+| 2-2 | `assets/sprites/` | 배경 픽셀아트 (바다, 바닥, 장식) 배치 |
+| 2-3 | `src/components/TankCanvas.tsx` | Skia Oval/Path → Skia Image 스프라이트 렌더링 전환 |
+| 2-4 | `src/components/TankCanvas.tsx` | 배경 그라데이션 → 픽셀아트 배경 이미지 교체 |
+| 2-5 | `src/constants/quotes.ts` | 50종+ 금붕어 멘트 데이터 (성공/실패/업적/일상) |
+| 2-6 | `src/components/TankCanvas.tsx` | 실패 시 쪽지 시스템 강화: 금붕어 놀라 사라짐 + 바닥에 쪽지 표시 |
+| 2-7 | `assets/lottie/food-drop.json` | 먹이 투하 애니메이션 |
+| 2-8 | `src/components/TankCanvas.tsx` | 성공 시 먹이 투하 + 먹는 애니메이션 연출 |
+
+**완료 기준**: 픽셀아트 물고기가 유영, 명상 성공/실패 시 새 연출 동작, quotes 랜덤 출력
+
+---
+
+### Phase 3: 뽀모도로 & 시스템 기능
+> Dot-moro 타이머, OLED 보호, 방해금지 모드
+
+| Task | 파일 | 내용 |
+|------|------|------|
+| 3-1 | `src/store/fishStore.ts` | 뽀모도로 상태 추가 (pomodoroMode, duration, startTime) |
+| 3-2 | `src/components/PomodoroPanel.tsx` | 타이머 설정 UI (20분/45분/1시간/2시간/4시간 선택) |
+| 3-3 | `src/components/TankCanvas.tsx` | 뽀모도로 활성 시 화면 전환 (타이머 숫자 표시, 물고기 유영 유지) |
+| 3-4 | `src/hooks/usePomodoroTimer.ts` | 타이머 엔진 (백그라운드 유지, 앱 이탈 감지) |
+| 3-5 | `src/hooks/useBurnInGuard.ts` | OLED 번인 방지: 10초 후 밝기 10%, 5분마다 픽셀 시프팅 |
+| 3-6 | `src/hooks/useFocusMode.ts` | 방해금지 모드 연동 안내 (expo-intent-launcher) |
+| 3-7 | `src/hooks/useMeditationFeedback.ts` | 뽀모도로 완료/실패 시 별도 사운드 + 진동 패턴 |
+| 3-8 | `src/components/TankCanvas.tsx` | 뽀모도로 실패 시 금붕어 가출 + 쪽지 시스템 연동 |
+
+**완료 기준**: 뽀모도로 시작→유지→성공/실패 전체 플로우 동작, 번인 방지 작동, DND 안내 표시
+
+---
+
+### Phase 4: 통합 & 폴리싱
+> 상점 확장, 사운드 토글, 최종 QA
+
+| Task | 파일 | 내용 |
+|------|------|------|
+| 4-1 | `src/components/ShopModal.tsx` | 상점에 새 스프라이트 스킨 반영, 수조 배경 테마 교체 |
+| 4-2 | `src/constants/shop.ts` | 새 상품 데이터 (픽셀아트 스킨, 배경) |
+| 4-3 | `src/components/TankCanvas.tsx` | Ambient Sound ON/OFF 토글 UI |
+| 4-4 | `src/store/fishStore.ts` | 뽀모도로 보상 포인트 체계 (시간 비례) |
+| 4-5 | 전체 | E2E 테스트 (명상 플로우, 뽀모도로 플로우, 상점 구매) |
+| 4-6 | 전체 | iOS/Android/Web 크로스플랫폼 검증 |
+
+**완료 기준**: 전체 시나리오 통과, 3개 플랫폼 정상 동작
+
+---
+
+## 3. 에셋 목록 (준비 필요)
+
+### 필수 에셋
+| 에셋 | 경로 | 형식 | 용도 |
+|------|------|------|------|
+| 물고기 스프라이트시트 | `assets/sprites/fish-default.png` | PNG | idle/swim/eat/scared 프레임 |
+| 배경 이미지 | `assets/sprites/bg-default.png` | PNG | 16-bit 바다 배경 |
+| 도트 폰트 | `assets/fonts/DungGeunMo.ttf` | TTF | UI 전체 |
+| 먹이 투하 | `assets/lottie/food-drop.json` | Lottie | 성공 시 먹이 |
+| 실패 사운드 | `assets/sounds/fail.mp3` | MP3 | 실패 시 효과음 |
+| 뽀모도로 완료음 | `assets/sounds/pomodoro-done.mp3` | MP3 | 타이머 완료 |
+
+### 추가 스킨 (Phase 4)
+| 에셋 | 경로 | 용도 |
+|------|------|------|
+| 골드 물고기 | `assets/sprites/fish-gold.png` | 상점 스킨 |
+| 코랄 물고기 | `assets/sprites/fish-coral.png` | 상점 스킨 |
+| 석양 배경 | `assets/sprites/bg-sunset.png` | 상점 테마 |
+| 심해 배경 | `assets/sprites/bg-deep.png` | 상점 테마 |
+
+---
+
+## 4. 병렬 작업 가능 매트릭스
 
 ```
-/src
-├── components/   # UI 컴포넌트 (TankCanvas, 물고기, 모달 등)
-├── hooks/        # 커스텀 훅 (useMeditationFeedback 등)
-├── store/        # Zustand 스토어 (생존 상태, 포인트, 상점 등)
-├── engine/       # 게임/로직 엔진 (필요 시)
-├── assets/       # 이미지, 사운드, Lottie JSON
-└── constants/    # 디자인 가이드 (theme.ts: Colors, FontSize 등)
+Phase 1: [1-1,1-2] → [1-3,1-4,1-5] → [1-6]
+          순차         병렬              순차
+
+Phase 2: [2-1,2-2,2-5,2-7] → [2-3,2-4] → [2-6,2-8]
+          병렬(에셋+데이터)    병렬(렌더링)   병렬(연출)
+
+Phase 3: [3-1] → [3-2,3-4,3-5,3-6] → [3-3,3-7,3-8]
+          순차    병렬(독립 모듈)        병렬(통합)
+
+Phase 4: [4-1,4-2,4-3,4-4] → [4-5] → [4-6]
+          병렬                 순차      순차
 ```
 
-- **디자인 상수**: `src/constants/theme.ts` — 앱 전체 색상·폰트·간격·모서리 반경
-- **메인 캔버스**: `src/components/TankCanvas.tsx` — Skia 수조 배경(파란 그라데이션)
+---
+
+## 5. 아키텍처
+
+```
+┌───────────────────────────────────────────────┐
+│            AppContent.tsx                     │
+│  - Font 로딩 대기                            │
+│  - Reanimated 초기화                         │
+│  - GestureHandlerRootView                    │
+└──────────────────┬────────────────────────────┘
+                   ↓
+┌───────────────────────────────────────────────┐
+│          TankCanvas.tsx (단일 화면)           │
+│                                               │
+│  ┌─────────────┐  ┌──────────────┐           │
+│  │ Skia Canvas  │  │  Overlays    │           │
+│  │ - 배경(픽셀) │  │ - 뽀모도로UI│           │
+│  │ - 물고기     │  │ - 쪽지       │           │
+│  │ - 먹이       │  │ - Lottie     │           │
+│  │ - 게이지     │  │ - 상점모달   │           │
+│  └─────────────┘  └──────────────┘           │
+└──────────────────┬────────────────────────────┘
+                   ↓
+┌────────────┐ ┌────────────┐ ┌────────────────┐
+│ fishStore  │ │ Hooks      │ │ Constants      │
+│ (Zustand)  │ │            │ │                │
+│ - status   │ │ - feedback │ │ - quotes.ts    │
+│ - points   │ │ - pomodoro │ │ - theme.ts     │
+│ - pomodoro │ │ - burnIn   │ │ - shop.ts      │
+│ - MMKV     │ │ - focus    │ │                │
+└────────────┘ └────────────┘ └────────────────┘
+```
 
 ---
 
-## 3. 개발 단계 (7단계)
+## 6. 에이전트 실행 전략
 
-### Step 1 ✅ 완료
-- `/src` 아래 `components`, `hooks`, `store`, `engine`, `assets`, `constants` 구조 생성
-- Skia로 수조 배경(부드러운 파란 그라데이션) 메인 Canvas 컴포넌트 작성
-- 디자인 가이드: `src/constants/theme.ts` (메인 색상, 폰트 스타일)
+각 Phase 시작 시 Admin Agent가 다음 패턴으로 실행:
 
-### Step 2 ✅ 완료
-- **물고기 생존 상태 (Zustand)** — `src/store/fishStore.ts`
-  - 상태: `NORMAL`(생존), `AWAY`(떠남)
-  - 데이터: `lastFedTime`(타임스탬프), `streak`(연속일수)
-  - `checkStatus()`: 앱 실행 시(재수화 완료 후) 현재 시간과 `lastFedTime` 비교 → 24시간 경과 시 `status = AWAY`, `streak = 0`
-  - `feed()`: 명상 성공 시 호출 (status NORMAL, lastFedTime 갱신, streak+1)
-  - **AsyncStorage** persist (`mindful-tank-fish`)로 앱 재시작 후에도 상태 유지
-  - `App.tsx`에서 `useFishStore` 구독으로 앱 로드 시 재수화 및 `checkStatus` 실행
-
-### Step 3 ✅ 완료
-- **Skia 물고기 애니메이션** — `src/components/TankCanvas.tsx` (통합)
-  - Ellipse + Path로 단순 물고기 형태, 꼬리 살랑거림(useClock + useDerivedValue, Math.sin)
-  - 평소 시간 기반으로 방향 변경하며 헤엄, **Pan 제스처로 터치한 위치 추적(Follow)**
-  - `status === AWAY`일 때: 물고기 숨김, 바닥 중앙에 **작은 편지(봉투) 아이콘** Path로 표시
-  - `react-native-gesture-handler` 설치, `GestureHandlerRootView`로 앱 루트 래핑
-
-### Step 4 ✅ 완료
-- **명상 타이머 (Hold to Feed)** — `src/components/TankCanvas.tsx`
-  - Pan 제스처로 화면 누르는 동안 Skia **원형 프로그레스** 게이지 상승 (Path stroke + start/end trim)
-  - NORMAL: **60초**, AWAY: **120초** 유지 시 성공 시 `feed()` 호출
-  - 손 떼면 게이지 0으로 초기화, 성공 시 target 초기화 및 `setIsHolding(false)`
-  - `isHolding` 상태로 누르고 있을 때만 원형 링 표시
-
-### Step 5 ✅ 완료
-- **오감 피드백**
-  - `expo-haptics`: 명상 중 10초마다 짧은 진동(Selection), 완료 시 강한 진동(NotificationSuccess)
-  - `expo-av`: 명상 중 잔잔한 물소리(ASMR) 루프, 완료 시 맑은 종소리
-  - **사운드**: 터치 시점 지연 방지를 위해 **미리 로드(Pre-load)** 권장
-  - 모든 로직을 **`useMeditationFeedback`** 커스텀 훅으로 관리
-
-### Step 6 ✅ 완료
-- **Lottie + 생산성 리마인더**
-  - `lottie-react-native`: 명상 성공 시 물고기 위 **반짝이는 효과** + **말풍선**
-  - 말풍선: "오늘의 목표는 무엇인가요?", "지금 바로 해야 할 일은?" 등 **랜덤 생산성 질문**
-  - AWAY 시 편지 클릭 → 물고기가 떠난 이유·다시 불러오는 법 안내 **감성 메시지 창**
-
-### Step 7 ✅ 완료
-- **상점 시스템**
-  - 명상 성공 시 **Point** 재화(10P/회) → Zustand 스토어 + 영속화
-  - 포인트로 **물고기 색상** 변경, **수조 배경 테마** 변경 가능한 상점 모달
-  - 선택한 스킨이 Skia 물고기·수조 렌더링에 **실시간 반영**
+1. **구현 에이전트** (worktree isolation) — 병렬 가능한 Task를 동시 투입
+2. **리뷰 에이전트** — 구현 결과물 코드 품질/로직 검증
+3. **수정 요청** — 문제 발견 시 구현 에이전트에 피드백
+4. **테스트 에이전트** — 빌드 + 유닛 테스트 + 시나리오 검증
+5. **병합** — 모든 검증 통과 시 메인 브랜치 반영
 
 ---
 
-## 4. 아키텍처 요약
+## 7. 현재 상태
 
-- **상태**: Zustand 스토어에서 생존 상태(status, lastFedTime, streak), 포인트, 상점 스킨 등 관리
-- **영속화**: AsyncStorage로 생존 관련 상태만 저장 (재시작 후 복원)
-- **렌더링**: 메인 화면은 Skia Canvas 한 장 위에 수조 배경 + 물고기 + (AWAY 시 편지 아이콘) 그리기
-- **명상 플로우**: GestureDetector → 게이지 진행 → 성공 시 feed 이벤트 → 스토어 업데이트(lastFedTime, streak, 포인트) + 사운드/진동/Lottie
-- **다국어**: UI 텍스트 추가/변경 시 지원하는 **모든 언어 파일**에 동기화 (규칙 참고)
-
----
-
-## 5. 참고 사항
-
-- **Babel**: `react-native-reanimated/plugin`이 `babel.config.js`에 **마지막**에 등록되어 있음
-- **Lottie**: LottieFiles에서 'Sparkle', 'Bubble' 등 무료 JSON 미리 준비 권장
-- **커밋/설명**: 한글로 작성
-
----
-
-## 6. 현재 구현된 파일 (참고)
-
-| 경로 | 설명 |
-|------|------|
-| `docs/DEVELOPMENT_PLAN.md` | 이 문서 |
-| `src/constants/theme.ts` | Colors, FontSize, Spacing 등 |
-| `src/components/TankCanvas.tsx` | Skia 수조 배경 그라데이션 |
-| `src/store/fishStore.ts` | 생존 상태(NORMAL/AWAY), lastFedTime, streak, checkStatus, feed, AsyncStorage persist |
-| `App.tsx` | GestureHandlerRootView, TankCanvas, useFishStore 구독 |
-| `src/components/TankCanvas.tsx` | 수조 배경 + 물고기(꼬리 흔들림, 터치 추적) + AWAY 시 편지 아이콘 |
-
-이 문서를 기준으로 Step 5부터 순서대로 구현하면 됨.  
-**현재 진행할 단계**: `docs/NEXT_STEP.md` 참고.
+- **v1.0 (Step 1~7)**: 완료 (Skia 벡터 기반)
+- **v2.0 시작점**: 이 문서의 Phase 1부터
+- **다음 실행할 Phase**: Phase 1 (기초 인프라 전환)

@@ -1,14 +1,21 @@
-# 다음 단계: Step 7 완료
+# 현재 상태: v2.0 개발 준비 완료
 
-## 완료된 작업: **Step 7 — 상점 시스템** ✅
+## v1.0 (완료)
+- Step 1~7 전체 구현 완료 (Skia 벡터 기반)
+- 마지막 커밋: `2f16df0`
 
-- 명상 성공 시 **Point** 재화(1회 10P) → Zustand 스토어 + AsyncStorage 영속화
-- **상점** 버튼(우측 상단) → 상점 모달: 포인트 표시, 물고기 스킨(기본/골드/코랄/민트/퍼플), 수조 테마(기본/석양/심해/숲) 구매·선택
-- 선택한 스킨·테마가 Skia 물고기·수조 렌더링에 **실시간 반영**
+## v2.0 (대기 중)
+- PRD 기반 전면 리뉴얼
+- 개발 계획: `docs/DEVELOPMENT_PLAN.md`
+- 기술 문서: `docs/DEVELOPMENT_DOC.md`
+- 기획서 원본: `docs/PRD.md`
+- 미결 질문: `docs/QUESTIONS.md`
 
-## 참고
+## 다음 실행
+- **Phase 1: 기초 인프라 전환** — "시작" 명령 시 즉시 실행
+- Phase 1은 에셋 없이 진행 가능 (MMKV 마이그레이션 + 도트 폰트)
+- Phase 2부터 픽셀아트 에셋 필요
 
-- 전체 단계·아키텍처: `docs/DEVELOPMENT_PLAN.md`
-- 스토어: `src/store/fishStore.ts` (points, fishSkinId, tankThemeId, purchasedFishSkins, purchasedTankThemes)
-- 상점 상수: `src/constants/shop.ts`, UI: `src/components/ShopModal.tsx`
-- Skia API: `Ellipse` → `Oval` 사용 (x, y, width, height)
+## 미결 사항
+- `docs/QUESTIONS.md`의 Q1~Q10 결정 필요
+- 특히 Q4(뽀모도로 백그라운드), Q8(Skia 유지 여부) 우선 결정 권장

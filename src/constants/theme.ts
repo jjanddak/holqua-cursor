@@ -1,55 +1,52 @@
 /**
- * Mindful Tank 앱 디자인 가이드
- * 메인 색상, 폰트 스타일 등 앱 전체에서 사용할 상수
+ * Mindful Tank v2.0 디자인 가이드
+ * 16-bit 레트로 픽셀아트 감성 — 다크 테마 (Deep Teal)
  */
 
 export const Colors = {
-  /** 수조 배경 - 부드러운 파란색 그라데이션 (상단) */
-  tankGradientTop: '#87CEEB',
-  /** 수조 배경 - 부드러운 파란색 그라데이션 (하단) */
-  tankGradientBottom: '#E0F4FF',
-  /** 메인 강조색 (CTA, 성공 등) */
-  primary: '#2E86AB',
-  /** 보조 색상 */
-  secondary: '#A23B72',
+  /** 수조 배경 (깊은 바다색 - OLED 효율) */
+  tankBg: '#0A2A3A',
+  /** 수조 배경 밝은 영역 */
+  tankBgLight: '#133E52',
+
+  /** 주요 액센트 (민트) */
+  primary: '#4ECDC4',
+  /** 보조 (코랄 - 경고/실패) */
+  secondary: '#FF6B6B',
+
   /** 배경 기본 */
-  background: '#F8FAFC',
+  background: '#0A1A2A',
   /** 카드/모달 배경 */
-  surface: '#FFFFFF',
+  surface: '#1A3A4A',
   /** 기본 텍스트 */
-  onSurface: '#1E293B',
+  onSurface: '#E8F4F8',
   /** 보조 텍스트 */
-  onSurfaceVariant: '#64748B',
+  onSurfaceVariant: '#7FBFCC',
   /** 비활성 */
-  outline: '#CBD5E1',
-  /** 성공 (명상 완료 등) */
-  success: '#059669',
+  outline: '#2A4A5A',
+
+  /** 성공 */
+  success: '#45B7A0',
   /** 경고 */
-  warning: '#D97706',
+  warning: '#F4A261',
+  /** 위험 */
+  danger: '#E76F51',
 } as const;
 
 export const FontFamily = {
-  /** 제목, 강조용 */
   heading: 'System',
-  /** 본문 */
   body: 'System',
-  /** 숫자/타이머 등 */
   mono: 'System',
 } as const;
 
 export const FontSize = {
-  /** 작은 라벨, 캡션 */
   xs: 12,
-  /** 본문 보조 */
   sm: 14,
-  /** 본문 */
   md: 16,
-  /** 소제목 */
   lg: 18,
-  /** 제목 */
   xl: 20,
-  /** 대제목 */
   xxl: 24,
+  timer: 48,
 } as const;
 
 export const Spacing = {

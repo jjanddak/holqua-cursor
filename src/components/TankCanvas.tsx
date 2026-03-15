@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   useWindowDimensions,
   View,
@@ -7,121 +7,70 @@ import {
   Pressable,
   StyleSheet,
 } from 'react-native';
-import LottieView from 'lottie-react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import {
-  Canvas,
-  Rect,
-  LinearGradient,
-  Path,
-  Group,
-  Oval,
-  Skia,
-  vec,
-  useClock,
-} from '@shopify/react-native-skia';
-import {
+import Animated, {
   useSharedValue,
   useFrameCallback,
   useDerivedValue,
+  useAnimatedStyle,
   runOnJS,
+  interpolate,
+  type SharedValue,
 } from 'react-native-reanimated';
 import { useFishStore } from '../store';
 import { useMeditationFeedback } from '../hooks';
-import { ShopModal } from './ShopModal';
 import {
   Colors,
   FontSize,
   Spacing,
   BorderRadius,
-  getRandomProductivityQuestion,
-  getFishSkinById,
-  getTankThemeById,
+  getRandomSuccessQuote,
+  getRandomFailQuote,
+  getRandomAwayQuote,
 } from '../constants';
 
 const MEDITATION_NORMAL_MS = 60 * 1000;
 const MEDITATION_AWAY_MS = 120 * 1000;
-const PROGRESS_RING_R = 56;
-const PROGRESS_STROKE = 8;
-
-const FISH_BODY_RX = 20;
-const FISH_BODY_RY = 10;
-const FISH_TAIL_LEN = 18;
 const FISH_SPEED = 2;
 const MARGIN = 60;
+const FISH_SIZE = 48;
 
-function makeLetterIconPath(size: number) {
-  const p = Skia.Path.Make();
-  const w = size * 0.5;
-  const h = size * 0.4;
-  p.moveTo(0, 0);
-  p.lineTo(w, 0);
-  p.lineTo(w, h);
-  p.lineTo(w / 2, h * 0.7);
-  p.lineTo(0, h);
-  p.close();
-  return p;
-}
-
-const tailPath = (() => {
-  const p = Skia.Path.Make();
-  p.moveTo(0, -FISH_BODY_RY);
-  p.lineTo(-FISH_TAIL_LEN, 0);
-  p.lineTo(0, FISH_BODY_RY);
-  p.close();
-  return p;
-})();
-
-const letterPath = makeLetterIconPath(36);
-
-/** 원형 프로그레스용 Path (중심 cx,cy 반지름 r) */
-function makeCirclePath(cx: number, cy: number, r: number) {
-  const p = Skia.Path.Make();
-  p.addCircle(cx, cy, r);
-  return p;
-}
-
-/**
- * 수조 배경 + 물고기/편지 아이콘 + 명상 Hold to Feed 원형 게이지.
- * 터치 시 물고기 추적, 누르고 있으면 게이지 상승(60초/120초 완료 시 feed).
- */
 export function TankCanvas() {
   const { width, height } = useWindowDimensions();
   const status = useFishStore((s) => s.status);
   const feed = useFishStore((s) => s.feed);
-  const fishSkinId = useFishStore((s) => s.fishSkinId);
-  const tankThemeId = useFishStore((s) => s.tankThemeId);
-
-  const fishSkin = getFishSkinById(fishSkinId);
-  const tankTheme = getTankThemeById(tankThemeId);
-  const fishColor = fishSkin?.color ?? Colors.primary;
-  const gradientTop = tankTheme?.gradientTop ?? Colors.tankGradientTop;
-  const gradientBottom = tankTheme?.gradientBottom ?? Colors.tankGradientBottom;
+  const hasNote = useFishStore((s) => s.hasNote);
+  const noteMessage = useFishStore((s) => s.noteMessage);
+  const setNote = useFishStore((s) => s.setNote);
+  const clearNote = useFishStore((s) => s.clearNote);
+  const streak = useFishStore((s) => s.streak);
+  const points = useFishStore((s) => s.points);
 
   const [isHolding, setIsHolding] = useState(false);
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
-  const [successFishX, setSuccessFishX] = useState(0);
-  const [successFishY, setSuccessFishY] = useState(0);
   const [successQuestion, setSuccessQuestion] = useState('');
   const [letterModalVisible, setLetterModalVisible] = useState(false);
-  const [shopModalVisible, setShopModalVisible] = useState(false);
+  const [awayQuote, setAwayQuote] = useState('');
+
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { onMeditationComplete } = useMeditationFeedback(isHolding);
 
-  const handleMeditationSuccess = useCallback(
-    (x: number, y: number) => {
-      onMeditationComplete();
-      feed();
-      setSuccessFishX(x);
-      setSuccessFishY(y);
-      setSuccessQuestion(getRandomProductivityQuestion());
-      setShowSuccessOverlay(true);
-      setTimeout(() => setShowSuccessOverlay(false), 4000);
-    },
-    [onMeditationComplete, feed]
-  );
+  // AWAY 상태 진입 시 한 번만 quote 생성
+  useEffect(() => {
+    if (status === 'AWAY') {
+      setAwayQuote(getRandomAwayQuote());
+    }
+  }, [status]);
 
-  const clock = useClock();
+  // cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    };
+  }, []);
+
+  // === Reanimated SharedValues ===
   const fishX = useSharedValue(width / 2);
   const fishY = useSharedValue(height / 2);
   const fishAngle = useSharedValue(0);
@@ -136,6 +85,34 @@ export function TankCanvas() {
       status === 'AWAY' ? MEDITATION_AWAY_MS : MEDITATION_NORMAL_MS;
   }, [status]);
 
+  useEffect(() => {
+    fishX.value = width / 2;
+    fishY.value = height / 2;
+  }, [width, height]);
+
+  // === 명상 성공 ===
+  const handleMeditationSuccess = useCallback(
+    (_x: number, _y: number) => {
+      onMeditationComplete();
+      feed();
+      setSuccessQuestion(getRandomSuccessQuote());
+      setShowSuccessOverlay(true);
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+      successTimerRef.current = setTimeout(
+        () => setShowSuccessOverlay(false),
+        4000
+      );
+    },
+    [onMeditationComplete, feed]
+  );
+
+  // === 명상 실패 (터치 해제) ===
+  const handleMeditationFail = useCallback(() => {
+    const failMsg = getRandomFailQuote();
+    setNote(failMsg);
+  }, [setNote]);
+
+  // === Pan Gesture ===
   const panGesture = Gesture.Pan()
     .onStart((e) => {
       targetX.value = e.x;
@@ -150,212 +127,170 @@ export function TankCanvas() {
     .onEnd(() => {
       if (progress.value < 1) {
         progress.value = 0;
+        runOnJS(handleMeditationFail)();
       }
       targetX.value = -1;
       targetY.value = -1;
       runOnJS(setIsHolding)(false);
     });
 
+  // === 물고기 AI 움직임 + 명상 프로그레스 (단일 useFrameCallback) ===
   useFrameCallback((frame) => {
     'worklet';
     const t = frame.timestamp * 0.001;
+
+    // 물고기 이동
     if (targetX.value >= 0 && targetY.value >= 0) {
       const dx = targetX.value - fishX.value;
       const dy = targetY.value - fishY.value;
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist > 8) {
         fishAngle.value = Math.atan2(dy, dx);
-        const vx = (dx / dist) * FISH_SPEED * 2;
-        const vy = (dy / dist) * FISH_SPEED * 2;
-        fishX.value += vx;
-        fishY.value += vy;
+        fishX.value += (dx / dist) * FISH_SPEED * 2;
+        fishY.value += (dy / dist) * FISH_SPEED * 2;
       }
     } else {
       randomAngle.value += Math.sin(t * 2.3) * 0.08;
-      const vx = Math.cos(randomAngle.value) * FISH_SPEED;
-      const vy = Math.sin(randomAngle.value) * FISH_SPEED;
-      fishX.value += vx;
-      fishY.value += vy;
+      fishX.value += Math.cos(randomAngle.value) * FISH_SPEED;
+      fishY.value += Math.sin(randomAngle.value) * FISH_SPEED;
       fishAngle.value = randomAngle.value;
     }
     fishX.value = Math.max(MARGIN, Math.min(width - MARGIN, fishX.value));
     fishY.value = Math.max(MARGIN, Math.min(height - MARGIN, fishY.value));
-  });
 
-  useFrameCallback((frame) => {
-    'worklet';
-    if (targetX.value < 0) return;
-    const dt = frame.timeSincePreviousFrame ?? 16;
-    progress.value = Math.min(
-      1,
-      progress.value + dt / requiredDurationMs.value
-    );
-    if (progress.value >= 1) {
-      runOnJS(handleMeditationSuccess)(fishX.value, fishY.value);
-      progress.value = 0;
-      targetX.value = -1;
-      targetY.value = -1;
-      runOnJS(setIsHolding)(false);
+    // 프로그레스 업데이트
+    if (targetX.value >= 0) {
+      const dt = frame.timeSincePreviousFrame ?? 16;
+      progress.value = Math.min(
+        1,
+        progress.value + dt / requiredDurationMs.value
+      );
+      if (progress.value >= 1) {
+        runOnJS(handleMeditationSuccess)(fishX.value, fishY.value);
+        progress.value = 0;
+        targetX.value = -1;
+        targetY.value = -1;
+        runOnJS(setIsHolding)(false);
+      }
     }
   });
 
-  useEffect(() => {
-    fishX.value = width / 2;
-    fishY.value = height / 2;
-  }, [width, height]);
+  // === Animated Styles ===
+  const fishStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: fishX.value - FISH_SIZE / 2 },
+      { translateY: fishY.value - FISH_SIZE / 2 },
+    ],
+  }));
 
-  const tailWiggle = useDerivedValue(
-    () => Math.sin(clock.value / 200) * 0.35
+  const progressBarWidth = useDerivedValue(() =>
+    interpolate(progress.value, [0, 1], [0, width - Spacing.xl * 2])
   );
 
-  const fishTransform = useDerivedValue(() => [
-    { translateX: fishX.value },
-    { translateY: fishY.value },
-    { rotate: fishAngle.value },
-  ]);
+  const progressBarStyle = useAnimatedStyle(() => ({
+    width: progressBarWidth.value,
+  }));
 
-  const tailTransform = useDerivedValue(() => [
-    { translateX: -FISH_BODY_RX },
-    { translateY: 0 },
-    { rotate: tailWiggle.value },
-  ]);
-
-  const letterX = width / 2 - 18;
-  const letterY = height - 80;
-
-  const progressCirclePath = useMemo(
-    () => makeCirclePath(width / 2, height / 2, PROGRESS_RING_R),
-    [width, height]
-  );
-
-  const SPARKLE_SIZE = 100;
+  // === 쪽지 모달 닫기 (clearNote 포함) ===
+  const handleCloseLetterModal = useCallback(() => {
+    setLetterModalVisible(false);
+    if (status !== 'AWAY') {
+      clearNote();
+    }
+  }, [status, clearNote]);
 
   return (
-    <View style={styles.container}>
-      <Pressable
-        style={[styles.shopButton, { top: 48, right: Spacing.md }]}
-        onPress={() => setShopModalVisible(true)}
-      >
-        <Text style={styles.shopButtonText}>상점</Text>
-      </Pressable>
+    <View style={[styles.container, { backgroundColor: Colors.tankBg }]}>
+      {/* 상태 표시 (좌측 상단) */}
+      <View style={styles.statusBar}>
+        <Text style={styles.statusText}>
+          {streak > 0 ? `${streak}일 연속` : ''}
+        </Text>
+        <Text style={styles.pointsText}>{points}P</Text>
+      </View>
+
       <GestureDetector gesture={panGesture}>
-        <Canvas style={{ flex: 1, width, height }}>
-          <Rect x={0} y={0} width={width} height={height}>
-            <LinearGradient
-              start={vec(0, 0)}
-              end={vec(width, height)}
-              colors={[gradientTop, gradientBottom]}
-            />
-          </Rect>
-          {isHolding && (
-            <Group>
-              <Path
-                path={progressCirclePath}
-                style="stroke"
-                strokeWidth={PROGRESS_STROKE}
-                strokeCap="round"
-                color={Colors.outline}
-                opacity={0.5}
-              />
-              <Path
-                path={progressCirclePath}
-                style="stroke"
-                strokeWidth={PROGRESS_STROKE}
-                strokeCap="round"
-                color={Colors.primary}
-                start={0}
-                end={progress}
-              />
-            </Group>
-          )}
+        <View style={StyleSheet.absoluteFill}>
+          {/* 물고기 (NORMAL 상태) */}
           {status === 'NORMAL' && (
-            <Group transform={fishTransform} origin={{ x: 0, y: 0 }}>
-              <Oval
-                x={-FISH_BODY_RX}
-                y={-FISH_BODY_RY}
-                width={FISH_BODY_RX * 2}
-                height={FISH_BODY_RY * 2}
-                color={fishColor}
-              />
-              <Group transform={tailTransform} origin={{ x: 0, y: 0 }}>
-                <Path path={tailPath} color={fishColor} />
-              </Group>
-            </Group>
+            <Animated.View style={[styles.fish, fishStyle]}>
+              <Text style={styles.fishEmoji}>🐠</Text>
+            </Animated.View>
           )}
-          {status === 'AWAY' && (
-            <Group
-              transform={[{ translateX: letterX }, { translateY: letterY }]}
-              origin={{ x: 18, y: 0 }}
+
+          {/* 쪽지 (AWAY 또는 실패 시) */}
+          {(status === 'AWAY' || hasNote) && (
+            <Pressable
+              style={[
+                styles.noteContainer,
+                {
+                  left: width / 2 - 60,
+                  top: height / 2 + 40,
+                },
+              ]}
+              onPress={() => setLetterModalVisible(true)}
             >
-              <Path path={letterPath} color={Colors.onSurfaceVariant} />
-            </Group>
+              <Text style={styles.noteEmoji}>📜</Text>
+              <Text style={styles.noteText} numberOfLines={1}>
+                {status === 'AWAY' ? awayQuote : noteMessage || '...'}
+              </Text>
+            </Pressable>
           )}
-        </Canvas>
+        </View>
       </GestureDetector>
 
-      {status === 'AWAY' && (
-        <Pressable
-          style={[
-            styles.letterTouchArea,
-            {
-              left: width / 2 - 40,
-              top: height - 80 - 40,
-            },
-          ]}
-          onPress={() => setLetterModalVisible(true)}
-        />
-      )}
-
-      {showSuccessOverlay && (
-        <View
-          style={[
-            styles.successOverlay,
-            {
-              left: successFishX - SPARKLE_SIZE / 2,
-              top: successFishY - SPARKLE_SIZE - 60,
-            },
-          ]}
-          pointerEvents="none"
-        >
-          <LottieView
-            source={require('../../assets/lottie/sparkle.json')}
-            autoPlay
-            loop={false}
-            style={{ width: SPARKLE_SIZE, height: SPARKLE_SIZE }}
-          />
-          <View style={styles.bubble}>
-            <Text style={styles.bubbleText} numberOfLines={2}>
-              {successQuestion}
-            </Text>
+      {/* 프로그레스 바 (하단) */}
+      {isHolding && (
+        <View style={styles.progressContainer}>
+          <View style={styles.progressTrack}>
+            <Animated.View style={[styles.progressFill, progressBarStyle]} />
           </View>
         </View>
       )}
 
-      <ShopModal
-        visible={shopModalVisible}
-        onClose={() => setShopModalVisible(false)}
-      />
+      {/* 타이머 카운트다운 (중앙) */}
+      {isHolding && (
+        <View style={styles.timerOverlay} pointerEvents="none">
+          <TimerDisplay progress={progress} durationMs={requiredDurationMs} />
+        </View>
+      )}
 
+      {/* 성공 오버레이 */}
+      {showSuccessOverlay && (
+        <View style={styles.successOverlay} pointerEvents="none">
+          <Text style={styles.successEmoji}>🎉</Text>
+          <View style={styles.bubble}>
+            <Text style={styles.bubbleText}>{successQuestion}</Text>
+          </View>
+        </View>
+      )}
+
+      {/* 편지/쪽지 모달 */}
       <Modal
         visible={letterModalVisible}
         transparent
         animationType="fade"
-        onRequestClose={() => setLetterModalVisible(false)}
+        onRequestClose={handleCloseLetterModal}
       >
         <Pressable
           style={styles.modalBackdrop}
-          onPress={() => setLetterModalVisible(false)}
+          onPress={handleCloseLetterModal}
         >
-          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.modalTitle}>물고기가 떠났어요</Text>
+          <Pressable
+            style={styles.modalContent}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text style={styles.modalTitle}>
+              {status === 'AWAY' ? '물고기가 떠났어요' : '금붕어의 한마디'}
+            </Text>
             <Text style={styles.modalBody}>
-              하루 동안 명상으로 먹이를 주지 않으면 물고기가 그만큼 멀어져요.
-              {'\n\n'}
-              다시 만나려면 2분 동안 잠깐 숨을 고르는 명상을 완료해 주세요.
+              {status === 'AWAY'
+                ? '하루 동안 명상으로 먹이를 주지 않으면 물고기가 떠나요.\n\n다시 만나려면 2분 동안 명상을 완료해 주세요.'
+                : noteMessage || '조금만 더 집중해봐요!'}
             </Text>
             <Pressable
               style={styles.modalButton}
-              onPress={() => setLetterModalVisible(false)}
+              onPress={handleCloseLetterModal}
             >
               <Text style={styles.modalButtonText}>알겠어요</Text>
             </Pressable>
@@ -366,53 +301,137 @@ export function TankCanvas() {
   );
 }
 
+/** 타이머 숫자 표시 — 값이 변경될 때만 JS 스레드 업데이트 */
+function TimerDisplay({
+  progress,
+  durationMs,
+}: {
+  progress: SharedValue<number>;
+  durationMs: SharedValue<number>;
+}) {
+  const [seconds, setSeconds] = useState(60);
+  const prevSeconds = useSharedValue(-1);
+
+  useFrameCallback(() => {
+    'worklet';
+    const total = durationMs.value / 1000;
+    const remaining = Math.ceil(total * (1 - progress.value));
+    if (remaining !== prevSeconds.value) {
+      prevSeconds.value = remaining;
+      runOnJS(setSeconds)(remaining);
+    }
+  });
+
+  return <Text style={styles.timerNumber}>{seconds}</Text>;
+}
+
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  shopButton: {
+  container: {
+    flex: 1,
+  },
+  statusBar: {
     position: 'absolute',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
+    top: 56,
+    left: Spacing.md,
+    right: Spacing.md,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     zIndex: 10,
   },
-  shopButtonText: {
+  statusText: {
+    color: Colors.onSurfaceVariant,
     fontSize: FontSize.sm,
+  },
+  pointsText: {
     color: Colors.primary,
+    fontSize: FontSize.sm,
     fontWeight: '600',
   },
-  letterTouchArea: {
+  fish: {
     position: 'absolute',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: FISH_SIZE,
+    height: FISH_SIZE,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fishEmoji: {
+    fontSize: 36,
+  },
+  noteContainer: {
+    position: 'absolute',
+    alignItems: 'center',
+    padding: Spacing.sm,
+  },
+  noteEmoji: {
+    fontSize: 32,
+  },
+  noteText: {
+    color: Colors.onSurfaceVariant,
+    fontSize: FontSize.xs,
+    marginTop: Spacing.xs,
+    maxWidth: 120,
+    textAlign: 'center',
+  },
+  progressContainer: {
+    position: 'absolute',
+    bottom: 60,
+    left: Spacing.xl,
+    right: Spacing.xl,
+  },
+  progressTrack: {
+    height: 6,
+    backgroundColor: Colors.outline,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: 6,
+    backgroundColor: Colors.primary,
+    borderRadius: 3,
+  },
+  timerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timerNumber: {
+    fontSize: FontSize.timer,
+    color: Colors.onSurface,
+    fontWeight: '200',
+    opacity: 0.6,
   },
   successOverlay: {
     position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
     alignItems: 'center',
-    width: 100,
+  },
+  successEmoji: {
+    fontSize: 64,
   },
   bubble: {
-    marginTop: 4,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    marginTop: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    backgroundColor: Colors.surface,
     borderRadius: BorderRadius.md,
-    maxWidth: 200,
+    maxWidth: 260,
   },
   bubbleText: {
-    fontSize: FontSize.sm,
+    fontSize: FontSize.md,
     color: Colors.onSurface,
     textAlign: 'center',
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: Spacing.lg,
@@ -443,6 +462,7 @@ const styles = StyleSheet.create({
   },
   modalButtonText: {
     fontSize: FontSize.md,
-    color: Colors.surface,
+    color: Colors.background,
+    fontWeight: '600',
   },
 });

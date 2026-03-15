@@ -5,14 +5,12 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { TankCanvas } from './src/components';
 import { useFishStore } from './src/store';
 
-/** 네이티브/웹 공통 실제 앱 UI (Skia 사용) */
 export default function AppContent() {
   useFishStore((s) => s.status);
-  // Reanimated 네이티브 모듈이 준비된 뒤에 TankCanvas 마운트 (시뮬레이터 "runtime not ready" 방지)
-  const [reanimatedReady, setReanimatedReady] = useState(false);
+  const [ready, setReady] = useState(false);
   useEffect(() => {
     const task = InteractionManager.runAfterInteractions(() => {
-      setReanimatedReady(true);
+      setReady(true);
     });
     return () => task.cancel();
   }, []);
@@ -20,8 +18,8 @@ export default function AppContent() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <View style={styles.container}>
-        {reanimatedReady ? <TankCanvas /> : null}
-        <StatusBar style="dark" />
+        {ready ? <TankCanvas /> : null}
+        <StatusBar style="light" />
       </View>
     </GestureHandlerRootView>
   );
