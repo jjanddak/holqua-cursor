@@ -52,6 +52,8 @@ export function TankCanvas() {
   const points = useFishStore((s) => s.points);
   const lastPomodoroDurationMs = useFishStore((s) => s.lastPomodoroDurationMs);
   const setLastPomodoroDuration = useFishStore((s) => s.setLastPomodoroDuration);
+  const ambientSoundEnabled = useFishStore((s) => s.ambientSoundEnabled);
+  const toggleAmbientSound = useFishStore((s) => s.toggleAmbientSound);
 
   const [isHolding, setIsHolding] = useState(false);
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
@@ -132,6 +134,7 @@ export function TankCanvas() {
   const randomAngle = useSharedValue(0);
   const progress = useSharedValue(0);
   const requiredDurationMs = useSharedValue(MEDITATION_NORMAL_MS);
+  const meditationSucceeded = useSharedValue(false);
 
   useEffect(() => {
     requiredDurationMs.value =
@@ -194,6 +197,7 @@ export function TankCanvas() {
       targetX.value = e.x;
       targetY.value = e.y;
       progress.value = 0;
+      meditationSucceeded.value = false;
       runOnJS(setIsHolding)(true);
     })
     .onUpdate((e) => {
@@ -201,10 +205,11 @@ export function TankCanvas() {
       targetY.value = e.y;
     })
     .onEnd(() => {
-      if (progress.value < 1) {
+      if (!meditationSucceeded.value && progress.value < 1) {
         progress.value = 0;
         runOnJS(handleMeditationFail)();
       }
+      meditationSucceeded.value = false;
       targetX.value = -1;
       targetY.value = -1;
       runOnJS(setIsHolding)(false);
@@ -240,6 +245,7 @@ export function TankCanvas() {
         progress.value + dt / requiredDurationMs.value
       );
       if (progress.value >= 1) {
+        meditationSucceeded.value = true;
         runOnJS(handleMeditationSuccess)(fishX.value, fishY.value);
         progress.value = 0;
         targetX.value = -1;
@@ -319,13 +325,23 @@ export function TankCanvas() {
         <Text style={styles.pointsText}>{points}P</Text>
       </View>
 
-      {/* 뽀모도로 버튼 */}
-      <Pressable
-        style={styles.pomodoroButton}
-        onPress={() => setShowPomodoroPanel(true)}
-      >
-        <Text style={styles.pomodoroButtonText}>집중</Text>
-      </Pressable>
+      {/* 액션 버튼들 */}
+      <View style={styles.actionButtons}>
+        <Pressable
+          style={styles.actionButton}
+          onPress={toggleAmbientSound}
+        >
+          <Text style={styles.actionButtonText}>
+            {ambientSoundEnabled ? '🔊' : '🔇'}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={styles.actionButton}
+          onPress={() => setShowPomodoroPanel(true)}
+        >
+          <Text style={styles.actionButtonText}>⏱️ 집중</Text>
+        </Pressable>
+      </View>
 
       <GestureDetector gesture={panGesture}>
         <View style={StyleSheet.absoluteFill}>
@@ -479,20 +495,23 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     fontWeight: '600',
   },
-  pomodoroButton: {
+  actionButtons: {
     position: 'absolute',
-    top: 56,
-    alignSelf: 'center',
-    paddingHorizontal: Spacing.lg,
+    bottom: 100,
+    right: Spacing.md,
+    gap: Spacing.sm,
+    zIndex: 10,
+  },
+  actionButton: {
+    paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     backgroundColor: Colors.surface,
     borderRadius: BorderRadius.md,
-    zIndex: 10,
+    alignItems: 'center',
   },
-  pomodoroButtonText: {
+  actionButtonText: {
     fontSize: FontSize.sm,
     color: Colors.primary,
-    fontWeight: '600',
   },
   fish: {
     position: 'absolute',
