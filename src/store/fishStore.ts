@@ -23,11 +23,25 @@ export interface FishState {
   /** 앰비언트 사운드 ON/OFF */
   ambientSoundEnabled: boolean;
 
+  /** 뽀모도로 설정 시간 (마지막 선택값, ms) */
+  lastPomodoroDurationMs: number;
+
   checkStatus: () => void;
   feed: (bonusPoints?: number) => void;
   setNote: (message: string) => void;
   clearNote: () => void;
   toggleAmbientSound: () => void;
+  setLastPomodoroDuration: (ms: number) => void;
+}
+
+/** 뽀모도로 성공 시 시간 비례 포인트 계산 */
+export function calcPomodoroPoints(durationMs: number): number {
+  const minutes = durationMs / 60000;
+  if (minutes <= 20) return 20;
+  if (minutes <= 45) return 45;
+  if (minutes <= 60) return 60;
+  if (minutes <= 120) return 100;
+  return 150; // 4시간
 }
 
 export const useFishStore = create<FishState>()(
@@ -40,6 +54,7 @@ export const useFishStore = create<FishState>()(
       hasNote: false,
       noteMessage: '',
       ambientSoundEnabled: true,
+      lastPomodoroDurationMs: 20 * 60 * 1000,
 
       checkStatus: () => {
         const now = Date.now();
@@ -72,6 +87,10 @@ export const useFishStore = create<FishState>()(
       toggleAmbientSound: () => {
         set({ ambientSoundEnabled: !get().ambientSoundEnabled });
       },
+
+      setLastPomodoroDuration: (ms: number) => {
+        set({ lastPomodoroDurationMs: ms });
+      },
     }),
     {
       name: 'mindful-tank-fish',
@@ -84,6 +103,7 @@ export const useFishStore = create<FishState>()(
         hasNote: state.hasNote,
         noteMessage: state.noteMessage,
         ambientSoundEnabled: state.ambientSoundEnabled,
+        lastPomodoroDurationMs: state.lastPomodoroDurationMs,
       }),
       onRehydrateStorage: () => () => {
         setTimeout(() => useFishStore.getState().checkStatus(), 0);

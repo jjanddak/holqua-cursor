@@ -17,8 +17,9 @@ import Animated, {
   interpolate,
   type SharedValue,
 } from 'react-native-reanimated';
-import { useFishStore } from '../store';
-import { useMeditationFeedback } from '../hooks';
+import { useFishStore, calcPomodoroPoints } from '../store';
+import { useMeditationFeedback, usePomodoroTimer, useBurnInGuard } from '../hooks';
+import { PomodoroPanel, PomodoroActiveOverlay } from './PomodoroPanel';
 import {
   Colors,
   FontSize,
@@ -27,6 +28,7 @@ import {
   getRandomSuccessQuote,
   getRandomFailQuote,
   getRandomAwayQuote,
+  getRandomPomodoroQuote,
 } from '../constants';
 
 const MEDITATION_NORMAL_MS = 60 * 1000;
@@ -45,16 +47,51 @@ export function TankCanvas() {
   const clearNote = useFishStore((s) => s.clearNote);
   const streak = useFishStore((s) => s.streak);
   const points = useFishStore((s) => s.points);
+  const lastPomodoroDurationMs = useFishStore((s) => s.lastPomodoroDurationMs);
+  const setLastPomodoroDuration = useFishStore((s) => s.setLastPomodoroDuration);
 
   const [isHolding, setIsHolding] = useState(false);
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
   const [successQuestion, setSuccessQuestion] = useState('');
   const [letterModalVisible, setLetterModalVisible] = useState(false);
   const [awayQuote, setAwayQuote] = useState('');
+  const [showPomodoroPanel, setShowPomodoroPanel] = useState(false);
+  const [selectedPomodoroDuration, setSelectedPomodoroDuration] = useState(
+    lastPomodoroDurationMs
+  );
 
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { onMeditationComplete } = useMeditationFeedback(isHolding);
+
+  // 뽀모도로 타이머
+  const handlePomodoroSuccess = useCallback(() => {
+    const bonus = calcPomodoroPoints(selectedPomodoroDuration);
+    feed(bonus);
+    setSuccessQuestion(getRandomPomodoroQuote());
+    setShowSuccessOverlay(true);
+    if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    successTimerRef.current = setTimeout(
+      () => setShowSuccessOverlay(false),
+      4000
+    );
+  }, [feed, selectedPomodoroDuration]);
+
+  const handlePomodoroFail = useCallback(() => {
+    setNote(getRandomFailQuote());
+  }, [setNote]);
+
+  const pomodoro = usePomodoroTimer(handlePomodoroSuccess, handlePomodoroFail);
+
+  // 번인 방지 (뽀모도로 진행 중에만 활성)
+  const { offsetX, offsetY } = useBurnInGuard(pomodoro.status === 'running');
+
+  const burnInStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: offsetX.value },
+      { translateY: offsetY.value },
+    ],
+  }));
 
   // AWAY 상태 진입 시 한 번만 quote 생성
   useEffect(() => {
@@ -63,7 +100,6 @@ export function TankCanvas() {
     }
   }, [status]);
 
-  // cleanup on unmount
   useEffect(() => {
     return () => {
       if (successTimerRef.current) clearTimeout(successTimerRef.current);
@@ -90,7 +126,6 @@ export function TankCanvas() {
     fishY.value = height / 2;
   }, [width, height]);
 
-  // === 명상 성공 ===
   const handleMeditationSuccess = useCallback(
     (_x: number, _y: number) => {
       onMeditationComplete();
@@ -106,10 +141,8 @@ export function TankCanvas() {
     [onMeditationComplete, feed]
   );
 
-  // === 명상 실패 (터치 해제) ===
   const handleMeditationFail = useCallback(() => {
-    const failMsg = getRandomFailQuote();
-    setNote(failMsg);
+    setNote(getRandomFailQuote());
   }, [setNote]);
 
   // === Pan Gesture ===
@@ -134,12 +167,11 @@ export function TankCanvas() {
       runOnJS(setIsHolding)(false);
     });
 
-  // === 물고기 AI 움직임 + 명상 프로그레스 (단일 useFrameCallback) ===
+  // === 물고기 움직임 + 프로그레스 ===
   useFrameCallback((frame) => {
     'worklet';
     const t = frame.timestamp * 0.001;
 
-    // 물고기 이동
     if (targetX.value >= 0 && targetY.value >= 0) {
       const dx = targetX.value - fishX.value;
       const dy = targetY.value - fishY.value;
@@ -158,7 +190,6 @@ export function TankCanvas() {
     fishX.value = Math.max(MARGIN, Math.min(width - MARGIN, fishX.value));
     fishY.value = Math.max(MARGIN, Math.min(height - MARGIN, fishY.value));
 
-    // 프로그레스 업데이트
     if (targetX.value >= 0) {
       const dt = frame.timeSincePreviousFrame ?? 16;
       progress.value = Math.min(
@@ -175,7 +206,6 @@ export function TankCanvas() {
     }
   });
 
-  // === Animated Styles ===
   const fishStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: fishX.value - FISH_SIZE / 2 },
@@ -191,7 +221,6 @@ export function TankCanvas() {
     width: progressBarWidth.value,
   }));
 
-  // === 쪽지 모달 닫기 (clearNote 포함) ===
   const handleCloseLetterModal = useCallback(() => {
     setLetterModalVisible(false);
     if (status !== 'AWAY') {
@@ -199,9 +228,40 @@ export function TankCanvas() {
     }
   }, [status, clearNote]);
 
+  const handleStartPomodoro = useCallback(() => {
+    setLastPomodoroDuration(selectedPomodoroDuration);
+    setShowPomodoroPanel(false);
+    pomodoro.start(selectedPomodoroDuration);
+  }, [selectedPomodoroDuration, pomodoro, setLastPomodoroDuration]);
+
+  const handleStopPomodoro = useCallback(() => {
+    pomodoro.stop();
+  }, [pomodoro]);
+
+  // 뽀모도로 성공/실패 후 리셋
+  useEffect(() => {
+    if (pomodoro.status === 'success' || pomodoro.status === 'failed') {
+      const timer = setTimeout(() => pomodoro.reset(), 100);
+      return () => clearTimeout(timer);
+    }
+  }, [pomodoro.status]);
+
+  // 뽀모도로 진행 중이면 전체 화면 오버레이
+  if (pomodoro.status === 'running') {
+    return (
+      <Animated.View style={[{ flex: 1 }, burnInStyle]}>
+        <PomodoroActiveOverlay
+          remainingMs={pomodoro.remainingMs}
+          progressRatio={pomodoro.progressRatio}
+          onStop={handleStopPomodoro}
+        />
+      </Animated.View>
+    );
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: Colors.tankBg }]}>
-      {/* 상태 표시 (좌측 상단) */}
+      {/* 상태 표시 */}
       <View style={styles.statusBar}>
         <Text style={styles.statusText}>
           {streak > 0 ? `${streak}일 연속` : ''}
@@ -209,24 +269,27 @@ export function TankCanvas() {
         <Text style={styles.pointsText}>{points}P</Text>
       </View>
 
+      {/* 뽀모도로 버튼 */}
+      <Pressable
+        style={styles.pomodoroButton}
+        onPress={() => setShowPomodoroPanel(true)}
+      >
+        <Text style={styles.pomodoroButtonText}>집중</Text>
+      </Pressable>
+
       <GestureDetector gesture={panGesture}>
         <View style={StyleSheet.absoluteFill}>
-          {/* 물고기 (NORMAL 상태) */}
           {status === 'NORMAL' && (
             <Animated.View style={[styles.fish, fishStyle]}>
               <Text style={styles.fishEmoji}>🐠</Text>
             </Animated.View>
           )}
 
-          {/* 쪽지 (AWAY 또는 실패 시) */}
           {(status === 'AWAY' || hasNote) && (
             <Pressable
               style={[
                 styles.noteContainer,
-                {
-                  left: width / 2 - 60,
-                  top: height / 2 + 40,
-                },
+                { left: width / 2 - 60, top: height / 2 + 40 },
               ]}
               onPress={() => setLetterModalVisible(true)}
             >
@@ -239,7 +302,7 @@ export function TankCanvas() {
         </View>
       </GestureDetector>
 
-      {/* 프로그레스 바 (하단) */}
+      {/* 명상 프로그레스 바 */}
       {isHolding && (
         <View style={styles.progressContainer}>
           <View style={styles.progressTrack}>
@@ -248,7 +311,7 @@ export function TankCanvas() {
         </View>
       )}
 
-      {/* 타이머 카운트다운 (중앙) */}
+      {/* 명상 타이머 카운트다운 */}
       {isHolding && (
         <View style={styles.timerOverlay} pointerEvents="none">
           <TimerDisplay progress={progress} durationMs={requiredDurationMs} />
@@ -265,7 +328,16 @@ export function TankCanvas() {
         </View>
       )}
 
-      {/* 편지/쪽지 모달 */}
+      {/* 뽀모도로 설정 패널 */}
+      <PomodoroPanel
+        visible={showPomodoroPanel}
+        selectedDurationMs={selectedPomodoroDuration}
+        onSelectDuration={setSelectedPomodoroDuration}
+        onStart={handleStartPomodoro}
+        onClose={() => setShowPomodoroPanel(false)}
+      />
+
+      {/* 쪽지 모달 */}
       <Modal
         visible={letterModalVisible}
         transparent
@@ -301,7 +373,6 @@ export function TankCanvas() {
   );
 }
 
-/** 타이머 숫자 표시 — 값이 변경될 때만 JS 스레드 업데이트 */
 function TimerDisplay({
   progress,
   durationMs,
@@ -326,9 +397,7 @@ function TimerDisplay({
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   statusBar: {
     position: 'absolute',
     top: 56,
@@ -347,6 +416,21 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     fontWeight: '600',
   },
+  pomodoroButton: {
+    position: 'absolute',
+    top: 56,
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    zIndex: 10,
+  },
+  pomodoroButtonText: {
+    fontSize: FontSize.sm,
+    color: Colors.primary,
+    fontWeight: '600',
+  },
   fish: {
     position: 'absolute',
     width: FISH_SIZE,
@@ -354,17 +438,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  fishEmoji: {
-    fontSize: 36,
-  },
+  fishEmoji: { fontSize: 36 },
   noteContainer: {
     position: 'absolute',
     alignItems: 'center',
     padding: Spacing.sm,
   },
-  noteEmoji: {
-    fontSize: 32,
-  },
+  noteEmoji: { fontSize: 32 },
   noteText: {
     color: Colors.onSurfaceVariant,
     fontSize: FontSize.xs,
@@ -390,11 +470,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   timerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -405,17 +481,11 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   successOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  successEmoji: {
-    fontSize: 64,
-  },
+  successEmoji: { fontSize: 64 },
   bubble: {
     marginTop: Spacing.md,
     paddingHorizontal: Spacing.lg,
