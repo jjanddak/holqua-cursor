@@ -16,6 +16,7 @@ interface PomodoroPanelProps {
   onSelectDuration: (ms: number) => void;
   onStart: () => void;
   onClose: () => void;
+  onOpenDnd?: () => void;
 }
 
 export function PomodoroPanel({
@@ -24,6 +25,7 @@ export function PomodoroPanel({
   onSelectDuration,
   onStart,
   onClose,
+  onOpenDnd,
 }: PomodoroPanelProps) {
   if (!visible) return null;
 
@@ -57,10 +59,12 @@ export function PomodoroPanel({
           ))}
         </View>
 
-        <Text style={styles.dndHint}>
-          집중 모드 중에는 앱을 벗어나면 실패합니다.{'\n'}
-          방해금지 모드를 켜는 것을 권장합니다.
-        </Text>
+        <Pressable onPress={onOpenDnd}>
+          <Text style={styles.dndHint}>
+            집중 모드 중에는 앱을 벗어나면 실패합니다.{'\n'}
+            <Text style={styles.dndLink}>방해금지 모드 설정 열기</Text>
+          </Text>
+        </Pressable>
 
         <Pressable style={styles.startButton} onPress={onStart}>
           <Text style={styles.startButtonText}>시작</Text>
@@ -170,6 +174,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: Spacing.lg,
     lineHeight: 18,
+  },
+  dndLink: {
+    color: Colors.primary,
+    textDecorationLine: 'underline',
   },
   startButton: {
     backgroundColor: Colors.primary,

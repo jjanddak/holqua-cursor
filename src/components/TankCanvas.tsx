@@ -15,10 +15,13 @@ import Animated, {
   useAnimatedStyle,
   runOnJS,
   interpolate,
+  withTiming,
+  withSequence,
+  withDelay,
   type SharedValue,
 } from 'react-native-reanimated';
 import { useFishStore, calcPomodoroPoints } from '../store';
-import { useMeditationFeedback, usePomodoroTimer, useBurnInGuard } from '../hooks';
+import { useMeditationFeedback, usePomodoroTimer, useBurnInGuard, useFocusMode } from '../hooks';
 import { PomodoroPanel, PomodoroActiveOverlay } from './PomodoroPanel';
 import {
   Colors,
@@ -59,10 +62,22 @@ export function TankCanvas() {
   const [selectedPomodoroDuration, setSelectedPomodoroDuration] = useState(
     lastPomodoroDurationMs
   );
+  const [fishScared, setFishScared] = useState(false);
+  const [showFoodDrop, setShowFoodDrop] = useState(false);
 
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scaredTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const foodTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 물고기 놀람 애니메이션 값
+  const fishScale = useSharedValue(1);
+  const fishOpacity = useSharedValue(1);
+  // 먹이 투하 애니메이션 값
+  const foodY = useSharedValue(-50);
+  const foodOpacity = useSharedValue(0);
 
   const { onMeditationComplete } = useMeditationFeedback(isHolding);
+  const { openDndSettings } = useFocusMode();
 
   // 뽀모도로 타이머
   const handlePomodoroSuccess = useCallback(() => {
@@ -103,6 +118,8 @@ export function TankCanvas() {
   useEffect(() => {
     return () => {
       if (successTimerRef.current) clearTimeout(successTimerRef.current);
+      if (scaredTimerRef.current) clearTimeout(scaredTimerRef.current);
+      if (foodTimerRef.current) clearTimeout(foodTimerRef.current);
     };
   }, []);
 
@@ -131,6 +148,17 @@ export function TankCanvas() {
       onMeditationComplete();
       feed();
       setSuccessQuestion(getRandomSuccessQuote());
+
+      // 먹이 투하 애니메이션
+      setShowFoodDrop(true);
+      foodY.value = -50;
+      foodOpacity.value = 1;
+      foodY.value = withTiming(height / 2 - 20, { duration: 800 });
+      foodOpacity.value = withDelay(2000, withTiming(0, { duration: 500 }));
+      if (foodTimerRef.current) clearTimeout(foodTimerRef.current);
+      foodTimerRef.current = setTimeout(() => setShowFoodDrop(false), 3000);
+
+      // 성공 오버레이
       setShowSuccessOverlay(true);
       if (successTimerRef.current) clearTimeout(successTimerRef.current);
       successTimerRef.current = setTimeout(
@@ -138,12 +166,27 @@ export function TankCanvas() {
         4000
       );
     },
-    [onMeditationComplete, feed]
+    [onMeditationComplete, feed, height, foodY, foodOpacity]
   );
 
   const handleMeditationFail = useCallback(() => {
     setNote(getRandomFailQuote());
-  }, [setNote]);
+
+    // 물고기 놀람 → 사라짐 연출
+    setFishScared(true);
+    fishScale.value = withSequence(
+      withTiming(1.3, { duration: 150 }),
+      withTiming(0.8, { duration: 100 }),
+      withTiming(1, { duration: 100 })
+    );
+    fishOpacity.value = withDelay(400, withTiming(0, { duration: 300 }));
+    if (scaredTimerRef.current) clearTimeout(scaredTimerRef.current);
+    scaredTimerRef.current = setTimeout(() => {
+      setFishScared(false);
+      fishScale.value = 1;
+      fishOpacity.value = 1;
+    }, 1500);
+  }, [setNote, fishScale, fishOpacity]);
 
   // === Pan Gesture ===
   const panGesture = Gesture.Pan()
@@ -210,7 +253,14 @@ export function TankCanvas() {
     transform: [
       { translateX: fishX.value - FISH_SIZE / 2 },
       { translateY: fishY.value - FISH_SIZE / 2 },
+      { scale: fishScale.value },
     ],
+    opacity: fishOpacity.value,
+  }));
+
+  const foodDropStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: foodY.value }],
+    opacity: foodOpacity.value,
   }));
 
   const progressBarWidth = useDerivedValue(() =>
@@ -281,7 +331,9 @@ export function TankCanvas() {
         <View style={StyleSheet.absoluteFill}>
           {status === 'NORMAL' && (
             <Animated.View style={[styles.fish, fishStyle]}>
-              <Text style={styles.fishEmoji}>🐠</Text>
+              <Text style={styles.fishEmoji}>
+                {fishScared ? '😱' : '🐠'}
+              </Text>
             </Animated.View>
           )}
 
@@ -318,6 +370,16 @@ export function TankCanvas() {
         </View>
       )}
 
+      {/* 먹이 투하 */}
+      {showFoodDrop && (
+        <Animated.View
+          style={[styles.foodDrop, foodDropStyle]}
+          pointerEvents="none"
+        >
+          <Text style={styles.foodEmoji}>🍞</Text>
+        </Animated.View>
+      )}
+
       {/* 성공 오버레이 */}
       {showSuccessOverlay && (
         <View style={styles.successOverlay} pointerEvents="none">
@@ -335,6 +397,7 @@ export function TankCanvas() {
         onSelectDuration={setSelectedPomodoroDuration}
         onStart={handleStartPomodoro}
         onClose={() => setShowPomodoroPanel(false)}
+        onOpenDnd={openDndSettings}
       />
 
       {/* 쪽지 모달 */}
@@ -445,6 +508,13 @@ const styles = StyleSheet.create({
     padding: Spacing.sm,
   },
   noteEmoji: { fontSize: 32 },
+  foodDrop: {
+    position: 'absolute',
+    alignSelf: 'center',
+    left: '50%',
+    marginLeft: -16,
+  },
+  foodEmoji: { fontSize: 32 },
   noteText: {
     color: Colors.onSurfaceVariant,
     fontSize: FontSize.xs,
